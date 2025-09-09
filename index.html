@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-time Chat with Translation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen p-4">
+
+  <!-- Authentication UI (Logged Out State) -->
+  <div id="auth-container" class="w-full max-w-md p-8 bg-gray-800 rounded-xl shadow-2xl space-y-6">
+    <h2 id="auth-title" class="text-3xl font-bold text-center text-white">Login</h2>
+    <input type="email" id="email-input" placeholder="Email" class="w-full px-4 py-3 bg-gray-700 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500">
+    <input type="password" id="password-input" placeholder="Password" class="w-full px-4 py-3 bg-gray-700 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500">
+    <button id="auth-button" class="w-full px-4 py-3 bg-purple-600 rounded-lg font-bold hover:bg-purple-700 transition-colors duration-300">Login</button>
+    <div class="text-center text-sm text-gray-400">
+      Don't have an account? <a href="#" id="auth-toggle" class="text-purple-400 hover:underline">Sign up</a>
+    </div>
+  </div>
+
+  <!-- Chat Application UI (Logged In State) -->
+  <div id="app-container" class="flex w-full max-w-5xl h-[85vh] bg-gray-800 rounded-2xl shadow-2xl overflow-hidden hidden">
+    <!-- Sidebar for Chat Selection and Language -->
+    <div class="w-1/4 bg-gray-700 p-6 flex flex-col space-y-4 shadow-lg rounded-l-2xl border-r border-gray-600">
+      <div class="flex items-center space-x-2 text-xl font-bold mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-purple-400">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span>My Chats</span>
+      </div>
+      <div id="chat-list" class="flex flex-col space-y-2 overflow-y-auto">
+        <!-- Chat buttons will be rendered here by JavaScript -->
+      </div>
+      
+      <!-- User Info and Language Selector -->
+      <div class="mt-auto pt-6 border-t border-gray-600 space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span id="user-display" class="font-medium text-purple-300 truncate"></span>
+          </div>
+          <button id="logout-button" class="text-red-400 hover:text-red-500 text-sm">Logout</button>
+        </div>
+        <div class="flex items-center space-x-2 text-sm text-gray-400 mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-languages"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h10"/><path d="M10 9h12"/><path d="M20 20l-3-3-3 3"/><path d="m17 17 2 2 4-4"/></svg>
+          <span>Translate To:</span>
+        </div>
+        <div class="relative">
+          <select id="language-select" class="w-full bg-gray-700 text-white py-2 px-3 rounded-lg appearance-none cursor-pointer pr-8 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <!-- Language options will be rendered here by JavaScript -->
+          </select>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="flex-1 flex flex-col">
+      <!-- Chat Header -->
+      <div class="bg-gray-700 p-4 rounded-t-2xl shadow-lg border-b-2 border-purple-500">
+        <h2 id="chat-header" class="text-2xl font-bold"></h2>
+        <p class="text-sm text-gray-400">Viewing messages translated to: <span id="translated-to-lang" class="font-semibold text-purple-300"></span></p>
+      </div>
+
+      <!-- Message Display Area -->
+      <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-800">
+        <div id="empty-message" class="text-center text-gray-500 pt-10">Start a conversation!</div>
+      </div>
+
+      <!-- Message Input Area -->
+      <div class="p-4 bg-gray-700 border-t-2 border-gray-600">
+        <div class="flex items-center space-x-4">
+          <input
+            type="text"
+            id="message-input"
+            class="flex-1 px-4 py-3 bg-gray-600 text-white rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            placeholder="Type your message..."
+          />
+          <button
+            id="send-button"
+            class="bg-purple-600 text-white p-3 rounded-full hover:bg-purple-700 transition-colors duration-300 shadow-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-send"><path d="m22 2-7 20-4-9-9-4 20-7z"/><path d="M22 2 11 13"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Import the Firebase SDKs
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Paste your Firebase config object here
+    const firebaseConfig = {
+      apiKey: "AIzaSyBlVo1OxntZrUcDPwUMIk-LEyqFpUebC3A",
+      authDomain: "translator-chat-app-5fa0b.firebaseapp.com",
+      projectId: "translator-chat-app-5fa0b",
+      storageBucket: "translator-chat-app-5fa0b.firebasestorage.app",
+      messagingSenderId: "753833061810",
+      appId: "1:753833061810:web:262f364d92107a621dc8ab",
+      measurementId: "G-WP6RX79769"
+    };
+
+    // Firebase Initialization
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // Socket.io and other app variables
+    const SOCKET_SERVER_URL = 'http://localhost:3001';
+    let socket = null;
+    let currentUser = null;
+    let chatSocketConnected = false;
+    let senderName = "Anonymous";
+    
+    // UI elements
+    const authContainer = document.getElementById('auth-container');
+    const appContainer = document.getElementById('app-container');
+    const authTitle = document.getElementById('auth-title');
+    const emailInput = document.getElementById('email-input');
+    const passwordInput = document.getElementById('password-input');
+    const authButton = document.getElementById('auth-button');
+    const authToggle = document.getElementById('auth-toggle');
+    const logoutButton = document.getElementById('logout-button');
+    const userDisplay = document.getElementById('user-display');
+
+    // Chat app elements
+    const chatListContainer = document.getElementById('chat-list');
+    const messagesContainer = document.getElementById('messages-container');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const languageSelect = document.getElementById('language-select');
+    const chatHeader = document.getElementById('chat-header');
+    const translatedToLangDisplay = document.getElementById('translated-to-lang');
+    const emptyMessage = document.getElementById('empty-message');
+
+    let selectedChatId = 'chat-1';
+    let selectedLanguage = 'en';
+    let isSigningUp = false;
+
+    // Chat and Language Data
+    const chats = [
+      { id: 'chat-1', name: 'Group Chat' },
+      { id: 'chat-2', name: 'Marketing Team' },
+      { id: 'chat-3', name: 'Product Squad' },
+    ];
+    const availableLanguages = [
+      { code: 'en', name: 'English' },
+      { code: 'fr', name: 'Français' },
+      { code: 'es', name: 'Español' },
+      { code: 'hi', name: 'हिन्दी' },
+      { code: 'ja', name: '日本語' },
+    ];
+
+    // --- Authentication and UI State Management ---
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        currentUser = user;
+        senderName = user.email.split('@')[0];
+        userDisplay.textContent = senderName;
+        authContainer.classList.add('hidden');
+        appContainer.classList.remove('hidden');
+        await initializeChatApp();
+      } else {
+        currentUser = null;
+        if (socket) {
+            socket.disconnect();
+        }
+        appContainer.classList.add('hidden');
+        authContainer.classList.remove('hidden');
+      }
+    });
+
+    authToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      isSigningUp = !isSigningUp;
+      authTitle.textContent = isSigningUp ? 'Sign Up' : 'Login';
+      authButton.textContent = isSigningUp ? 'Sign Up' : 'Login';
+      authToggle.textContent = isSigningUp ? 'Login' : 'Sign up';
+    });
+
+    authButton.addEventListener('click', async () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      if (isSigningUp) {
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+          await setDoc(doc(db, 'users', currentUser.uid), {
+            email: currentUser.email,
+            preferredLanguage: 'en',
+            userName: senderName,
+          });
+        } catch (error) {
+          alert(error.message);
+        }
+      } else {
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+          alert(error.message);
+        }
+      }
+    });
+
+    logoutButton.addEventListener('click', async () => {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        alert("Logout failed: " + error.message);
+      }
+    });
+
+    // --- Chat Application Logic ---
+    async function initializeChatApp() {
+      // Fetch user's language preference
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      if (userDoc.exists()) {
+        selectedLanguage = userDoc.data().preferredLanguage || 'en';
+      } else {
+        selectedLanguage = 'en'; // Default to English if no preference
+      }
+      
+      // Initialize UI
+      renderChatList();
+      renderLanguageOptions();
+      languageSelect.value = selectedLanguage;
+      translatedToLangDisplay.textContent = availableLanguages.find(lang => lang.code === selectedLanguage)?.name || 'English';
+
+      // Connect to Socket.io and join the chat
+      if (!socket || !chatSocketConnected) {
+        socket = io(SOCKET_SERVER_URL, {
+            query: { userId: currentUser.uid }
+        });
+
+        // Add Socket.io event listeners
+        socket.on('connect', () => {
+          chatSocketConnected = true;
+          console.log('Connected to chat server!');
+          setSelectedChat(selectedChatId);
+        });
+
+        socket.on('disconnect', () => {
+            chatSocketConnected = false;
+        });
+
+        socket.on('chatHistory', (history) => {
+          messagesContainer.innerHTML = '';
+          history.forEach(msg => displayMessage(msg));
+        });
+
+        socket.on('receiveMessage', (message) => {
+          displayMessage(message);
+        });
+      }
+    }
+
+    // --- Chat UI Functions ---
+    const renderChatList = () => {
+      chatListContainer.innerHTML = '';
+      chats.forEach(chat => {
+        const button = document.createElement('button');
+        button.className = `w-full py-3 px-4 rounded-xl text-left transition-all duration-300 flex items-center space-x-3 font-medium ${
+          selectedChatId === chat.id ? 'bg-purple-600 text-white shadow-xl' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+        }`;
+        button.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>${chat.name}</span>
+        `;
+        button.onclick = () => {
+          setSelectedChat(chat.id);
+        };
+        chatListContainer.appendChild(button);
+      });
+    };
+
+    const renderLanguageOptions = () => {
+      languageSelect.innerHTML = '';
+      availableLanguages.forEach(lang => {
+        const option = document.createElement('option');
+        option.value = lang.code;
+        option.textContent = lang.name;
+        languageSelect.appendChild(option);
+      });
+    };
+
+    const setSelectedChat = (chatId) => {
+      selectedChatId = chatId;
+      messagesContainer.innerHTML = '';
+      if (socket) {
+        socket.emit('joinChat', { chatId: selectedChatId, preferredLanguage: selectedLanguage, senderName: senderName });
+      }
+      chatHeader.textContent = chats.find(chat => chat.id === selectedChatId).name;
+      renderChatList();
+      emptyMessage.style.display = 'block';
+    };
+
+    const displayMessage = (message) => {
+      if (emptyMessage) {
+          emptyMessage.style.display = 'none';
+      }
+      const isSender = message.sender === senderName;
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `flex ${isSender ? 'justify-end' : 'justify-start'}`;
+      
+      messageDiv.innerHTML = `
+        <div class="p-4 rounded-2xl max-w-2/3 shadow-md ${isSender ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-200'}" style="word-wrap: break-word;">
+          <div class="font-bold mb-1">${message.sender}</div>
+          <div class="text-sm">${message.translatedText}</div>
+          <div class="text-xs mt-1 text-gray-400 italic">Original: ${message.originalText}</div>
+        </div>
+      `;
+      messagesContainer.appendChild(messageDiv);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    };
+
+    const sendMessage = () => {
+      const text = messageInput.value.trim();
+      if (text === '' || !socket) return;
+      const messageData = {
+        text: text,
+        chatId: selectedChatId,
+        senderName: senderName,
+      };
+      socket.emit('sendMessage', messageData);
+      messageInput.value = '';
+    };
+
+    // Event Listeners
+    sendButton.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+    languageSelect.addEventListener('change', async (e) => {
+      selectedLanguage = e.target.value;
+      translatedToLangDisplay.textContent = availableLanguages.find(lang => lang.code === selectedLanguage).name;
+      await setDoc(doc(db, 'users', currentUser.uid), { preferredLanguage: selectedLanguage }, { merge: true });
+      setSelectedChat(selectedChatId);
+    });
+  </script>
+</body>
+</html>
