@@ -89,7 +89,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const socket = io("https://globetalk-elt8.onrender.com");
+    const socket = io("http://localhost:3001");
 
     let currentUser = null;
     let selectedChatId = null;
