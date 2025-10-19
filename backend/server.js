@@ -15,10 +15,28 @@ const db = admin.firestore();
 
 // Express + Socket.io Setup
 const app = express();
-app.use(cors());
+
+// ✅ Allow requests from your frontend (Vercel) and local dev
+app.use(cors({
+  origin: [
+    "https://globe-talk.vercel.app",  // Your Vercel live domain
+    "http://localhost:3000"           // Optional: for local testing
+  ],
+  methods: ["GET", "POST"],
+  credentials: true
+}));
+
 const server = http.createServer(app);
+
+// ✅ Configure Socket.io CORS the same way
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: {
+    origin: [
+      "https://globe-talk.vercel.app",
+      "http://localhost:3000"
+    ],
+    methods: ["GET", "POST"]
+  }
 });
 
 const translate = new Translate({ key: process.env.GOOGLE_TRANSLATE_API_KEY });
@@ -26,7 +44,7 @@ const PORT = process.env.PORT || 3001;
 
 const activeUsers = {}; // socket.id -> { chatId, lang, sender }
 
-// Helper: Get chat history
+// --- Helper: Get chat history ---
 async function getChatHistory(chatId) {
   const messagesRef = db.collection('chats').doc(chatId).collection('messages');
   const snapshot = await messagesRef.orderBy('timestamp', 'asc').get();
@@ -37,7 +55,7 @@ async function getChatHistory(chatId) {
 
 // --- SOCKET LOGIC ---
 io.on('connection', (socket) => {
-  console.log(`Socket connected: ${socket.id}`);
+  console.log(`🔌 Socket connected: ${socket.id}`);
 
   socket.on('joinChat', async (data) => {
     const { chatId, preferredLanguage, senderName } = data;
@@ -45,7 +63,7 @@ io.on('connection', (socket) => {
 
     activeUsers[socket.id] = { chatId, preferredLanguage, senderName };
     socket.join(chatId);
-    console.log(`${senderName} joined chat ${chatId}`);
+    console.log(`👤 ${senderName} joined chat ${chatId}`);
 
     const chatHistory = await getChatHistory(chatId);
     const translatedHistory = await Promise.all(
@@ -102,9 +120,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    console.log(`❌ Socket disconnected: ${socket.id}`);
     delete activeUsers[socket.id];
   });
 });
 
 server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
-
