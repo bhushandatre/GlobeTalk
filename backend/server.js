@@ -19,7 +19,7 @@ const app = express();
 // ✅ Allow requests from your frontend (Vercel) and local dev
 app.use(cors({
   origin: [
-    "https://globe-talk.vercel.app",  // Your Vercel live domain
+    "https://globetalk-elt8.onrender.com",  // Your Vercel live domain
     "http://localhost:3000"           // Optional: for local testing
   ],
   methods: ["GET", "POST"],
