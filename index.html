@@ -5,7 +5,9 @@
   <title>GlobeChat MVP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <style>body { font-family: 'Inter', sans-serif; }</style>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
 </head>
 <body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
 
@@ -75,7 +77,7 @@
     import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc, getDoc, getDocs, collection, query, where, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // 🔧 Replace with your Firebase config
+    // 🔧 Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyDewp9rN2OPl3_hdb8pcBt4xguKsXYtNY8",
       authDomain: "globechat-2025.firebaseapp.com",
@@ -86,10 +88,15 @@
       measurementId: "G-ZWH3E7SE5T"
     };
 
+    // ✅ Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const socket = io("http://localhost:3001");
+
+    // ✅ Connect to Live Backend (Render)
+    const socket = io("https://globetalk-elt8.onrender.com", {
+      transports: ["websocket", "polling"]
+    });
 
     let currentUser = null;
     let selectedChatId = null;
@@ -170,7 +177,7 @@
       }
     });
 
-    // Load all user chats in sidebar
+    // Load user chats
     function loadUserChats() {
       const chatQuery = query(collection(db, "chats"), where("members", "array-contains", currentUser.uid));
       onSnapshot(chatQuery, async (snapshot) => {
@@ -182,7 +189,7 @@
           const otherEmail = otherUserDoc.exists() ? otherUserDoc.data().email : "Unknown";
 
           const chatBtn = document.createElement("button");
-          chatBtn.className = `w-full text-left bg-gray-700 hover:bg-gray-600 p-2 rounded-lg`;
+          chatBtn.className = "w-full text-left bg-gray-700 hover:bg-gray-600 p-2 rounded-lg";
           chatBtn.textContent = otherEmail;
           chatBtn.onclick = () => openChat(docSnap.id, otherEmail);
           chatList.appendChild(chatBtn);
@@ -190,7 +197,7 @@
       });
     }
 
-    // Open a chat
+    // Open chat
     function openChat(chatId, otherEmail) {
       selectedChatId = chatId;
       chatHeader.textContent = otherEmail;
@@ -218,7 +225,7 @@
       }
     });
 
-    // Search for user to start chat
+    // Search for user
     searchButton.addEventListener("click", async () => {
       const email = searchInput.value.trim().toLowerCase();
       searchResults.innerHTML = "";
@@ -244,7 +251,6 @@
         btn.className = "bg-gray-700 px-3 py-2 rounded-lg w-full mt-1";
         btn.textContent = `Chat with ${u.email}`;
         btn.onclick = async () => {
-          // 🔍 Check if chat already exists (fixed)
           const pairKey = [currentUser.uid, otherUserId].sort().join("_");
           const chatQuery = query(collection(db, "chats"), where("pairKey", "==", pairKey));
           const chatSnap = await getDocs(chatQuery);
@@ -280,7 +286,7 @@
       messageInput.value = "";
     });
 
-    // Socket events
+    // Receive messages
     socket.on("receiveMessage", (msg) => {
       const div = document.createElement("div");
       div.className = "bg-gray-700 p-3 rounded";
@@ -289,6 +295,7 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     });
 
+    // Chat history
     socket.on("chatHistory", (history) => {
       messagesContainer.innerHTML = "";
       history.forEach((msg) => {
